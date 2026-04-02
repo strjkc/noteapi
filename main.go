@@ -7,9 +7,13 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/strjkc/noteapi/handlers"
+	"github.com/strjkc/noteapi/state"
+	"github.com/strjkc/noteapi/storage"
 )
 
 func main() {
+	storage := storage.NewStorage()
+	state := state.NewState(storage)
 	err := godotenv.Load()
 	if err != nil {
 		panic("No .env found")
