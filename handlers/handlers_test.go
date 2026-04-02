@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/strjkc/noteapi/spellcheck"
 )
 
 func TestSpellCheck(t *testing.T) {
-	parser := NewParser()
-	errors, err := parser.service(strings.NewReader(`# This is a heading
+	parser := spellcheck.NewParser()
+	errors, err := parser.SpellCheckerService(strings.NewReader(`# This is a heading
 
 Then some body here **bold**, some _italic_
 
@@ -24,14 +26,12 @@ Then some body here **bold**, some _italic_
 		if len(error.Mistakes) != 0 {
 			t.Fatal("Errors not 0")
 		}
-
 	}
-
 }
 
 func TestSpellCheck2(t *testing.T) {
-	parser := NewParser()
-	errors, err := parser.service(strings.NewReader(`# This is a heaing
+	parser := spellcheck.NewParser()
+	errors, err := parser.SpellCheckerService(strings.NewReader(`# This is a heaing
 
 Then some body here **bold**, some _italic_
 
@@ -53,14 +53,12 @@ Then some body here **bold**, some _italic_
 				t.Fatal("Errors not 0")
 			}
 		}
-
 	}
-
 }
 
 func TestSpellCheck3(t *testing.T) {
-	parser := NewParser()
-	errors, err := parser.service(strings.NewReader(`# This is a heaing
+	parser := spellcheck.NewParser()
+	errors, err := parser.SpellCheckerService(strings.NewReader(`# This is a heaing
 
 Then some boxdy here **boldx**, some _italicqsee_
 
@@ -90,7 +88,5 @@ Then some boxdy here **boldx**, some _italicqsee_
 				t.Fatal("Errors not 0")
 			}
 		}
-
 	}
-
 }
