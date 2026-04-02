@@ -6,6 +6,7 @@ import (
 
 	"github.com/strjkc/noteapi/converter"
 	"github.com/strjkc/noteapi/spellcheck"
+	"github.com/strjkc/noteapi/state"
 )
 
 const (
@@ -13,7 +14,16 @@ const (
 	FILENOTFOUND  = "The Requested File Can Not Be Found"
 )
 
-func (s *State) HandleSpellCheck(w http.ResponseWriter, r *http.Request) {
+type Handlers struct {
+	State *state.State
+}
+
+func NewHandlers(state *state.State) *Handlers {
+	h := Handlers{State: state}
+	return &h
+}
+
+func (h *Handlers) HandleSpellCheck(w http.ResponseWriter, r *http.Request) {
 	// TODO:
 	// here i should inject a file path to the NewChecker in order for the dict to be loaded with the correct language
 	// also i should cache checkers per locale, or dicts per locale for reuse
@@ -28,14 +38,14 @@ func (s *State) HandleSpellCheck(w http.ResponseWriter, r *http.Request) {
 	sendJson(w, 200, json)
 }
 
-func (s *State) HandleFileUpload(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 	// TODO
 	// is should read from the body reader, and send the data to s3 or to a local directory
 	// so i should have an interface called file uploader or something so i can plug in local dir or remote dir
 	// after file is uploaded i can just respond with 201 and thats it really
 }
 
-func (s *State) HandleGetHtml(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandleGetHtml(w http.ResponseWriter, r *http.Request) {
 	fileName := r.PathValue("fileName")
 	// TODO:
 	// Check if it's empty?
@@ -44,8 +54,8 @@ func (s *State) HandleGetHtml(w http.ResponseWriter, r *http.Request) {
 	// does it already exist as html? if so does the version of the html match the version of the text file?
 	// if yes, send
 	// if no, convert again, sotre it to disk, update db and send back
-	file, err := s.Storage.GetFile(fileName)
-	if err != nil {
+	fileExists := h.State.Storage.FileExists(fileName)
+	if !fileExists {
 		respondWithError(w, 404, FILENOTFOUND)
 		return
 	}
@@ -53,7 +63,7 @@ func (s *State) HandleGetHtml(w http.ResponseWriter, r *http.Request) {
 	fileAsHtml := converter.ConvertToHtml(fileName)
 	// strip the .txt
 	fileNameAsHtml := fmt.Sprint("%s.html", fileName)
-	s.Storage.StoreFile(fileAsHtml, fileNameAsHtml)
+	h.State.Storage.StoreFile(fileAsHtml, fileNameAsHtml)
 	// update the db with the file version
 	http.ServeFile(w, r, string(fileAsHtml))
 

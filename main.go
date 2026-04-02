@@ -12,9 +12,11 @@ import (
 )
 
 func main() {
-	storage := storage.NewStorage()
-	state := state.NewState(storage)
 	err := godotenv.Load()
+	storageDir := os.Getenv("STORAGEDIR")
+	storage := storage.NewLocalStorage(storageDir)
+	state := state.NewState(storage)
+	handlers := handlers.NewHandlers(state)
 	if err != nil {
 		panic("No .env found")
 	}
