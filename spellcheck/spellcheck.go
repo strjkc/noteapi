@@ -13,15 +13,15 @@ type SP struct {
 	readPos int
 }
 
-func NewChecker() SP {
+func NewChecker() *SP {
 	sp := SP{}
 	sp.dict = make(map[string]struct{})
 	sp.buildDict()
-	return sp
+	return &sp
 }
 
 func (s *SP) buildDict() {
-	//TODO: fix path
+	// TODO: fix path
 	data, err := os.ReadFile("/home/strahinja/Work/noteapi/spellcheck/words_alpha.txt")
 	if err != nil {
 		panic("Cant open dict file")
