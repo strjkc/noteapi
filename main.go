@@ -23,6 +23,8 @@ func main() {
 	port := os.Getenv("PORT")
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /spellcheck", handlers.HandleSpellCheck)
+	mux.HandleFunc("POST /upload", handlers.HandleFileUpload)
+	mux.HandleFunc("GET /fileAsHtml/{filename}", handlers.HandleGetHtml)
 	server := http.Server{
 		Addr:    ":" + port,
 		Handler: mux,

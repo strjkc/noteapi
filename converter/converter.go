@@ -1,19 +1,28 @@
 package converter
 
 import (
-	"bytes"
+	"errors"
 	"os"
+	"path/filepath"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
 )
 
-func ConvertToHtml(filepath string) []byte {
-	var buff bytes.Buffer
-	mdFile, err := os.ReadFile(filepath)
+func ConvertToHtml(fileDir, fileName string) (string, error) {
+	// var buff bytes.Buffer
+	mdPath := filepath.Join(fileDir, fileName)
+	htmlPath := filepath.Join(fileDir, fileName+".html")
+	file, err := os.Create(htmlPath)
 	if err != nil {
-		panic("Unable to open file")
+		return "", errors.New("unable to create file")
+	}
+	defer file.Close()
+
+	mdFile, err := os.ReadFile(mdPath)
+	if err != nil {
+		return "", errors.New("unable to read file")
 	}
 
 	htmlWriter := html.DefaultWriter
@@ -24,6 +33,6 @@ func ConvertToHtml(filepath string) []byte {
 			html.WithWriter(htmlWriter),
 		),
 	)
-	converter.Convert(mdFile, &buff)
-	return buff.Bytes()
+	converter.Convert(mdFile, file)
+	return htmlPath, nil
 }
