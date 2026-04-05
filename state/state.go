@@ -5,7 +5,7 @@ import (
 )
 
 type Storage interface {
-	StoreFile(data io.ReadCloser, filePath string) (bool, error)
+	StoreFile(data io.ReadCloser, filePath string) error
 	GetFile(filePath string) ([]byte, error)
 	FileExists(filePath string) bool
 	GetFilePath(fileName string) string

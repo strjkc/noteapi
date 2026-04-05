@@ -16,21 +16,24 @@ func NewLocalStorage(storagePath string) *LocalStorage {
 	return &l
 }
 
-func (l *LocalStorage) StoreFile(data io.ReadCloser, fileName string) (bool, error) {
-	// TODO: what if file already exits
-	fmt.Printf("\n%s\n", l.storageDir)
+func (l *LocalStorage) StoreFile(data io.ReadCloser, fileName string) error {
 	if _, err := os.Stat(l.storageDir); os.IsNotExist(err) {
 		os.Mkdir(l.storageDir, 0o755)
 	}
-	path := filepath.Join(l.storageDir, fileName)
-	file, err := os.Create(path)
+	filePath := filepath.Join(l.storageDir, fileName)
+	file, err := os.Create(filePath)
 	if err != nil {
 		fmt.Println("error occured")
-		return false, err
+		return err
 	}
 	defer file.Close()
-	io.Copy(file, data)
-	return true, nil
+	_, err = io.Copy(file, data)
+	if err != nil {
+		file.Close()
+		os.Remove(filePath)
+		return err
+	}
+	return nil
 }
 
 func (l *LocalStorage) GetFile(fileName string) ([]byte, error) {
@@ -41,8 +44,8 @@ func (l *LocalStorage) GetFile(fileName string) ([]byte, error) {
 	return data, nil
 }
 
-func (l *LocalStorage) GetFilePath(fileName string) string {
-	if _, err := os.Stat(l.storageDir + fileName); err != nil {
+func (l *LocalStorage) GetStoragePath(fileName string) string {
+	if !l.FileExists(fileName) {
 		return ""
 	}
 	return l.storageDir
