@@ -12,7 +12,7 @@ import (
 
 func ConvertToHtml(fileDir, fileName string) (string, error) {
 	// var buff bytes.Buffer
-	mdPath := filepath.Join(fileDir, fileName)
+	mdPath := filepath.Join(fileDir, fileName+".md")
 	htmlPath := filepath.Join(fileDir, fileName+".html")
 	file, err := os.Create(htmlPath)
 	if err != nil {

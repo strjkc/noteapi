@@ -2,14 +2,27 @@ package handlers
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/strjkc/noteapi/spellcheck"
 )
 
+var checker spellcheck.SpellChecker
+
+func Setup(m *testing.M) {
+	fact := spellcheck.NewWordMapFactory(os.Getenv("DICTDIR"))
+	wm, err := fact.WordMap("eng")
+	if err != nil {
+		return
+	}
+	checker = spellcheck.NewChecker(wm)
+	m.Run()
+}
+
 func TestSpellCheck(t *testing.T) {
-	parser := spellcheck.NewParser()
+	parser := spellcheck.NewParser(checker)
 	errors, err := parser.SpellCheckerService(strings.NewReader(`# This is a heading
 
 Then some body here **bold**, some _italic_
@@ -30,7 +43,7 @@ Then some body here **bold**, some _italic_
 }
 
 func TestSpellCheck2(t *testing.T) {
-	parser := spellcheck.NewParser()
+	parser := spellcheck.NewParser(checker)
 	errors, err := parser.SpellCheckerService(strings.NewReader(`# This is a heaing
 
 Then some body here **bold**, some _italic_
@@ -57,7 +70,7 @@ Then some body here **bold**, some _italic_
 }
 
 func TestSpellCheck3(t *testing.T) {
-	parser := spellcheck.NewParser()
+	parser := spellcheck.NewParser(checker)
 	errors, err := parser.SpellCheckerService(strings.NewReader(`# This is a heaing
 
 Then some boxdy here **boldx**, some _italicqsee_

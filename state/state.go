@@ -1,21 +1,25 @@
 package state
 
 import (
-	"io"
+	"mime/multipart"
+
+	"github.com/strjkc/noteapi/spellcheck"
 )
 
 type Storage interface {
-	StoreFile(data io.ReadCloser, filePath string) error
+	StoreFile(data *multipart.Reader) error
 	GetFile(filePath string) ([]byte, error)
 	FileExists(filePath string) bool
-	GetFilePath(fileName string) string
+	StorageDir() string
+	FileURL(fileName string) string
 }
 
 type State struct {
-	Storage Storage
+	Storage        Storage
+	WordMapFactory *spellcheck.WordMapFactory
 }
 
-func NewState(storage Storage) *State {
-	s := State{Storage: storage}
+func NewState(storage Storage, wmf *spellcheck.WordMapFactory) *State {
+	s := State{Storage: storage, WordMapFactory: wmf}
 	return &s
 }

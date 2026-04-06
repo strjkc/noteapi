@@ -27,10 +27,19 @@ func NewHandlers(state *state.State) *Handlers {
 
 // TODO: i should not mix html and json apis, apis that return json are under /api/ apis that return html are under something else
 func (h *Handlers) HandleSpellCheck(w http.ResponseWriter, r *http.Request) {
+	locale := r.PathValue("locale")
+	if locale == "" {
+		respondWithError(w, 400, BADREQ)
+		return
+	}
 	// TODO:
-	// here i should inject a file path to the NewChecker in order for the dict to be loaded with the correct language
 	// also i should cache checkers per locale, or dicts per locale for reuse
-	checker := spellcheck.NewChecker()
+	wm, err := h.State.WordMapFactory.WordMap(locale)
+	if err != nil {
+		respondWithError(w, 500, "Locale not supported")
+		return
+	}
+	checker := spellcheck.NewChecker(wm)
 	parser := spellcheck.NewParser(checker)
 	errors, err := parser.SpellCheckerService(r.Body)
 	if err != nil {
@@ -42,7 +51,12 @@ func (h *Handlers) HandleSpellCheck(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleFileUpload(w http.ResponseWriter, r *http.Request) {
-	err := h.State.Storage.StoreFile(r.Body, "newFile.md")
+	mr, err := r.MultipartReader()
+	if err != nil {
+		respondWithError(w, 400, BADREQ)
+		return
+	}
+	err = h.State.Storage.StoreFile(mr)
 	if err != nil {
 		respondWithError(w, 500, FILENOTSAVED)
 		return
@@ -57,12 +71,12 @@ func (h *Handlers) HandleGetHtml(w http.ResponseWriter, r *http.Request) {
 	}
 	// TODO:
 	// convert, sotre it to disk, update db and send back
-	htmlFilePath := h.State.Storage.GetFilePath(fileName + ".html")
+	htmlFilePath := h.State.Storage.FileURL(fileName + ".html")
 	if htmlFilePath != "" {
 		http.ServeFile(w, r, htmlFilePath)
 		return
 	}
-	path := h.State.Storage.GetFilePath(fileName + ".md")
+	path := h.State.Storage.StorageDir()
 	if path == "" {
 		respondWithError(w, 404, FILENOTFOUND)
 		return
