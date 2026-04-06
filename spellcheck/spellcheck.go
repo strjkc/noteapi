@@ -1,36 +1,21 @@
 package spellcheck
 
 import (
-	"os"
 	"strings"
 )
 
 type SP struct {
-	dict    map[string]struct{}
+	wordMap *WordMap
 	input   string
 	ch      byte
 	pos     int
 	readPos int
 }
 
-func NewChecker() *SP {
+func NewChecker(wordMap *WordMap) *SP {
 	sp := SP{}
-	sp.dict = make(map[string]struct{})
-	sp.buildDict()
+	sp.wordMap = wordMap
 	return &sp
-}
-
-func (s *SP) buildDict() {
-	// TODO: fix path
-	data, err := os.ReadFile("/home/strahinja/Work/noteapi/spellcheck/words_alpha.txt")
-	if err != nil {
-		panic("Cant open dict file")
-	}
-	dataString := string(data)
-	words := strings.Split(dataString, "\r\n")
-	for _, word := range words {
-		s.dict[word] = struct{}{}
-	}
 }
 
 func (s *SP) initState(input string) {
@@ -51,7 +36,7 @@ func (s *SP) CheckSpelling(input string) []string {
 	for s.readPos < len(input) {
 		if s.isChar() {
 			word := s.readWord()
-			if _, ok := s.dict[word]; !ok {
+			if _, ok := s.wordMap.ValidWords[word]; !ok {
 				errors = append(errors, word)
 			}
 		} else {

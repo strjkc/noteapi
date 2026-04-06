@@ -1,12 +1,28 @@
 package spellcheck
 
 import (
+	"os"
 	"testing"
 )
 
+var (
+	checker SpellChecker
+	wm      *WordMap
+)
+
+func Setup(m *testing.M) {
+	fact := NewWordMapFactory(os.Getenv("DICTDIR"))
+	wm, err := fact.WordMap("eng")
+	if err != nil {
+		return
+	}
+	checker = NewChecker(wm)
+	m.Run()
+}
+
 func TestSpellcheckPositive(t *testing.T) {
 	input := "# This is a heading"
-	s := NewChecker()
+	s := NewChecker(wm)
 	errs := s.CheckSpelling(input)
 	if len(errs) != 0 {
 		t.Fatal("Errs should be empty")
@@ -15,7 +31,7 @@ func TestSpellcheckPositive(t *testing.T) {
 
 func TestSpellcheckNeg(t *testing.T) {
 	input := "# Thes is a heading"
-	s := NewChecker()
+	s := NewChecker(wm)
 	errs := s.CheckSpelling(input)
 	if len(errs) != 1 {
 		t.Fatal("Errs should have one element")
@@ -24,7 +40,7 @@ func TestSpellcheckNeg(t *testing.T) {
 
 func TestSpellcheckDash(t *testing.T) {
 	input := "# This-is-a-heading"
-	s := NewChecker()
+	s := NewChecker(wm)
 	errs := s.CheckSpelling(input)
 	if len(errs) != 0 {
 		t.Fatal("Errs should have one element")
@@ -33,7 +49,7 @@ func TestSpellcheckDash(t *testing.T) {
 
 func TestSpellcheckMultierr(t *testing.T) {
 	input := "# Ths isy a headin"
-	s := NewChecker()
+	s := NewChecker(wm)
 	errs := s.CheckSpelling(input)
 	if len(errs) != 3 {
 		t.Fatal("Errs incorect count")
@@ -42,7 +58,7 @@ func TestSpellcheckMultierr(t *testing.T) {
 
 func TestSpellcheckMultiline(t *testing.T) {
 	input := "# This is a heading\n> and this is a quote"
-	s := NewChecker()
+	s := NewChecker(wm)
 	errs := s.CheckSpelling(input)
 	if len(errs) != 0 {
 		t.Fatal("Errs incorect count")
@@ -60,7 +76,7 @@ Then some body here **bold**, some _italic_
 - And that
 - And other`
 
-	s := NewChecker()
+	s := NewChecker(wm)
 	errs := s.CheckSpelling(input)
 	if len(errs) != 0 {
 		t.Fatal("Errs incorect count")
@@ -78,7 +94,7 @@ Than somed body here **bolf**, some _italic_
 - And thay
 - And other`
 
-	s := NewChecker()
+	s := NewChecker(wm)
 	errs := s.CheckSpelling(input)
 	if len(errs) != 7 {
 		t.Fatal("Errs incorect count")
