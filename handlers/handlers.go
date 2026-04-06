@@ -32,8 +32,6 @@ func (h *Handlers) HandleSpellCheck(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 400, BADREQ)
 		return
 	}
-	// TODO:
-	// also i should cache checkers per locale, or dicts per locale for reuse
 	wm, err := h.State.WordMapFactory.WordMap(locale)
 	if err != nil {
 		respondWithError(w, 500, "Locale not supported")
@@ -50,6 +48,7 @@ func (h *Handlers) HandleSpellCheck(w http.ResponseWriter, r *http.Request) {
 	sendJson(w, 200, json)
 }
 
+// TODO: names for the file should be sanitized not just accepted in the StoreFile
 func (h *Handlers) HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 	mr, err := r.MultipartReader()
 	if err != nil {
