@@ -1,4 +1,4 @@
 -- name: CreateFile :one
-insert into files(name, created_at, updated_at, user_id) values(?, ?, ?, ?)
+insert into files(name, created_at, updated_at, user_id, deleted) values(?, ?, ?, ?, 0)
 
 returning *;

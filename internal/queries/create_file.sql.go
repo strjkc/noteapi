@@ -10,9 +10,9 @@ import (
 )
 
 const createFile = `-- name: CreateFile :one
-insert into files(name, created_at, updated_at, user_id) values(?, ?, ?, ?)
+insert into files(name, created_at, updated_at, user_id, deleted) values(?, ?, ?, ?, 0)
 
-returning id, name, created_at, updated_at, user_id
+returning id, name, created_at, updated_at, user_id, deleted
 `
 
 type CreateFileParams struct {
@@ -36,6 +36,7 @@ func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) (File, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.UserID,
+		&i.Deleted,
 	)
 	return i, err
 }

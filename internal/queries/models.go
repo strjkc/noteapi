@@ -10,6 +10,7 @@ type File struct {
 	CreatedAt string
 	UpdatedAt string
 	UserID    int64
+	Deleted   int64
 }
 
 type User struct {

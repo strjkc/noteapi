@@ -16,11 +16,12 @@ import (
 )
 
 const (
-	INTERNALERROR = "Internal Server Error"
-	FILENOTFOUND  = "The Requested File Can Not Be Found"
-	FILENOTSAVED  = "The File Was Not Stored Due to an Internal Error"
-	BADREQ        = "Bad Request"
-	USEREXISTS    = "Username Already Exists"
+	INTERNALERROR     = "Internal Server Error"
+	FILENOTFOUND      = "The Requested File Can Not Be Found"
+	FILENOTSAVED      = "The File Was Not Stored Due to an Internal Error"
+	BADREQ            = "Bad Request"
+	USEREXISTS        = "Username Already Exists"
+	INCONSISTENTSTATE = "There is a Mismatch Between the State of the Storage and the DB"
 )
 
 type Handlers struct {
@@ -94,6 +95,8 @@ func (h *Handlers) HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err = h.State.DbQueries.CreateFile(context.Background(), fileData)
 	if err != nil {
+		// TODO: delete file if here
+		fmt.Println("Erorr saving to db: ", err)
 		respondWithError(w, 500, FILENOTSAVED)
 		return
 	}
@@ -106,42 +109,111 @@ func (h *Handlers) HandleGetHtml(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 400, BADREQ)
 	}
 	// TODO: auth the user
-	// TODO: html file exists for this user? is the timestamp of this file newer or == to the md version of the file?
-	// if yes return if no, convert again we have a new file
-	// if the md file was deleted but we still have an html version then we just return it
-	// auth user and get id
 	user, err := h.State.DbQueries.GetUser(context.Background(), "stra")
 	if err != nil {
 		respondWithError(w, 500, BADREQ)
 		return
 	}
+
 	htmlFilePath := h.State.Storage.FileURL(fileName + ".html")
-	if htmlFilePath != "" {
+	dbHTMLFile, err := h.State.DbQueries.GetFile(context.Background(), queries.GetFileParams{Name: fileName + ".html", UserID: user.ID})
+	if htmlFilePath == "" && err != nil {
+		// file doesn't exist on the disk and in the db, we create and serve
+		fmt.Println("No db entry, not file on disk")
+		path := h.State.Storage.StorageDir()
+		if path == "" {
+			respondWithError(w, 404, FILENOTFOUND)
+			return
+		}
+		htmlFilePath, err = converter.ConvertToHtml(path, fileName)
+		fileData := queries.CreateFileParams{
+			Name:      fileName + ".html",
+			CreatedAt: time.Now().Format(time.RFC3339),
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			UserID:    user.ID,
+		}
+		_, err = h.State.DbQueries.CreateFile(context.Background(), fileData)
+		if err != nil {
+			respondWithError(w, 500, FILENOTSAVED)
+			return
+		}
+		// update the db with the file version
+		if err != nil {
+			respondWithError(w, 500, "Unable to fetch html file")
+			return
+		}
+		http.ServeFile(w, r, htmlFilePath)
+		return
+	} else if htmlFilePath == "" && err == nil {
+		// TODO: mark as deleted in db
+		respondWithError(w, 500, INCONSISTENTSTATE)
+		return
+	} else if htmlFilePath != "" && err != nil {
+		// file is on disk but not in db
+		// inconsistent state we don't know whom this file belongs to, we cant serve it
+		// TODO: we should remove the file
+		respondWithError(w, 500, INCONSISTENTSTATE)
+		return
+	}
+	// if we are here, it means file is on disk and in the db
+	// we need to check if it's stale or not
+
+	dbMDFile, err := h.State.DbQueries.GetFile(context.Background(), queries.GetFileParams{Name: fileName + ".md", UserID: user.ID})
+	if err != nil {
+		// if its not in db, we can assume the html file is the latest representation and we serve it
 		http.ServeFile(w, r, htmlFilePath)
 		return
 	}
-	path := h.State.Storage.StorageDir()
-	if path == "" {
-		respondWithError(w, 404, FILENOTFOUND)
-		return
-	}
-	htmlFilePath, err = converter.ConvertToHtml(path, fileName)
-	fileData := queries.CreateFileParams{
-		Name:      fileName,
-		CreatedAt: time.Now().Format(time.RFC3339),
-		UpdatedAt: time.Now().Format(time.RFC3339),
-		UserID:    user.ID,
-	}
-	_, err = h.State.DbQueries.CreateFile(context.Background(), fileData)
+
+	HTMLUpdatedAt, err := time.Parse(time.RFC3339, dbHTMLFile.UpdatedAt)
 	if err != nil {
-		respondWithError(w, 500, FILENOTSAVED)
-		return
+		respondWithError(w, 500, INTERNALERROR)
 	}
-	// update the db with the file version
+	MDUpdatedAt, err := time.Parse(time.RFC3339, dbMDFile.UpdatedAt)
 	if err != nil {
-		respondWithError(w, 500, "Unable to fetch html file")
-		return
+		respondWithError(w, 500, INTERNALERROR)
 	}
+	if HTMLUpdatedAt.Before(MDUpdatedAt) {
+		fmt.Println("found on disk, older than orig")
+		mdFilePath := h.State.Storage.FileURL(fileName + ".md")
+		if mdFilePath == "" {
+			// TODO: mark md file in db as deleted
+			// inconsistent state, md file is in db but not on disk
+			respondWithError(w, 500, INCONSISTENTSTATE)
+			return
+
+		}
+
+		path := h.State.Storage.StorageDir()
+		if path == "" {
+			respondWithError(w, 404, FILENOTFOUND)
+			return
+		}
+		htmlFilePath, err = converter.ConvertToHtml(path, fileName)
+		fileData := queries.CreateFileParams{
+			Name:      fileName + ".html",
+			CreatedAt: time.Now().Format(time.RFC3339),
+			UpdatedAt: time.Now().Format(time.RFC3339),
+			UserID:    user.ID,
+		}
+		_, err = h.State.DbQueries.CreateFile(context.Background(), fileData)
+		if err != nil {
+			respondWithError(w, 500, FILENOTSAVED)
+			return
+		}
+		// update the db with the file version
+		if err != nil {
+			respondWithError(w, 500, "Unable to fetch html file")
+			return
+		}
+
+		http.ServeFile(w, r, htmlFilePath)
+		return
+		// convert again and update the timestamps
+	}
+	// we are good we should server
+
+	fmt.Println("found on disk, newer than orig")
 	http.ServeFile(w, r, htmlFilePath)
 }
 

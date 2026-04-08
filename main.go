@@ -36,7 +36,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/spellcheck/{locale}", handlers.HandleSpellCheck)
 	mux.HandleFunc("POST /api/upload", handlers.HandleFileUpload)
-	mux.HandleFunc("GET /app/file-as-html/{filename}", handlers.HandleGetHtml)
+	mux.HandleFunc("POST /app/file-as-html/{filename}", handlers.HandleGetHtml)
 	mux.HandleFunc("POST /api/users", handlers.HandleCreateUser)
 	server := http.Server{
 		Addr:    ":" + port,
