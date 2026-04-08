@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"mime/multipart"
 	"os"
 	"strings"
 	"testing"
@@ -23,7 +24,7 @@ func Setup(m *testing.M) {
 
 func TestSpellCheck(t *testing.T) {
 	parser := spellcheck.NewParser(checker)
-	errors, err := parser.SpellCheckerService(strings.NewReader(`# This is a heading
+	errors, err := parser.SpellCheckerService(multipart.NewReader(strings.NewReader(`# This is a heading
 
 Then some body here **bold**, some _italic_
 
@@ -31,7 +32,7 @@ Then some body here **bold**, some _italic_
 
 - This
 - And that
-- And other`))
+- And other`), "\r\n"))
 	if err != nil {
 		t.Fatal("Error")
 	}
@@ -44,7 +45,7 @@ Then some body here **bold**, some _italic_
 
 func TestSpellCheck2(t *testing.T) {
 	parser := spellcheck.NewParser(checker)
-	errors, err := parser.SpellCheckerService(strings.NewReader(`# This is a heaing
+	errors, err := parser.SpellCheckerService(multipart.NewReader(strings.NewReader(`# This is a heaing
 
 Then some body here **bold**, some _italic_
 
@@ -52,7 +53,7 @@ Then some body here **bold**, some _italic_
 
 - This
 - And that
-- And other`))
+- And other`), "\r\n"))
 	if err != nil {
 		t.Fatal("Error")
 	}
@@ -71,7 +72,7 @@ Then some body here **bold**, some _italic_
 
 func TestSpellCheck3(t *testing.T) {
 	parser := spellcheck.NewParser(checker)
-	errors, err := parser.SpellCheckerService(strings.NewReader(`# This is a heaing
+	errors, err := parser.SpellCheckerService(multipart.NewReader(strings.NewReader(`# This is a heaing
 
 Then some boxdy here **boldx**, some _italicqsee_
 
@@ -79,7 +80,7 @@ Then some boxdy here **boldx**, some _italicqsee_
 
 - This
 - And that
-- And other`))
+- And other`), "\r\n"))
 	if err != nil {
 		t.Fatal("Error")
 	}

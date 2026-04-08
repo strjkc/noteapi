@@ -1,10 +1,16 @@
 package handlers
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"runtime"
+	"time"
 
+	"github.com/alexedwards/argon2id"
 	"github.com/strjkc/noteapi/converter"
+	"github.com/strjkc/noteapi/internal/queries"
 	"github.com/strjkc/noteapi/spellcheck"
 	"github.com/strjkc/noteapi/state"
 )
@@ -14,6 +20,7 @@ const (
 	FILENOTFOUND  = "The Requested File Can Not Be Found"
 	FILENOTSAVED  = "The File Was Not Stored Due to an Internal Error"
 	BADREQ        = "Bad Request"
+	USEREXISTS        = "Username Already Exists"
 )
 
 type Handlers struct {
@@ -25,13 +32,19 @@ func NewHandlers(state *state.State) *Handlers {
 	return &h
 }
 
-// TODO: i should not mix html and json apis, apis that return json are under /api/ apis that return html are under something else
 func (h *Handlers) HandleSpellCheck(w http.ResponseWriter, r *http.Request) {
 	locale := r.PathValue("locale")
 	if locale == "" {
 		respondWithError(w, 400, BADREQ)
 		return
 	}
+
+	mr, err := r.MultipartReader()
+	if err != nil {
+		respondWithError(w, 400, BADREQ)
+		return
+	}
+
 	wm, err := h.State.WordMapFactory.WordMap(locale)
 	if err != nil {
 		respondWithError(w, 500, "Locale not supported")
@@ -39,7 +52,7 @@ func (h *Handlers) HandleSpellCheck(w http.ResponseWriter, r *http.Request) {
 	}
 	checker := spellcheck.NewChecker(wm)
 	parser := spellcheck.NewParser(checker)
-	errors, err := parser.SpellCheckerService(r.Body)
+	errors, err := parser.SpellCheckerService(mr)
 	if err != nil {
 		respondWithError(w, 500, INTERNALERROR)
 	}
@@ -48,7 +61,6 @@ func (h *Handlers) HandleSpellCheck(w http.ResponseWriter, r *http.Request) {
 	sendJson(w, 200, json)
 }
 
-// TODO: names for the file should be sanitized not just accepted in the StoreFile
 func (h *Handlers) HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 	mr, err := r.MultipartReader()
 	if err != nil {
@@ -68,8 +80,6 @@ func (h *Handlers) HandleGetHtml(w http.ResponseWriter, r *http.Request) {
 	if fileName == "" {
 		respondWithError(w, 400, BADREQ)
 	}
-	// TODO:
-	// convert, sotre it to disk, update db and send back
 	htmlFilePath := h.State.Storage.FileURL(fileName + ".html")
 	if htmlFilePath != "" {
 		http.ServeFile(w, r, htmlFilePath)
@@ -87,4 +97,65 @@ func (h *Handlers) HandleGetHtml(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.ServeFile(w, r, htmlFilePath)
+}
+
+func (h *Handlers) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
+	type UserReq struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	var user UserReq
+	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+		respondWithError(w, 400, BADREQ)
+		return
+	}
+	_, err := h.State.DbQueries.GetUser(context.Background(), user.Username)
+	if err == nil {
+		respondWithError(w, 400, USEREXISTS)
+		return
+	}
+
+	params := argon2id.Params{
+		Memory: 128 * 1024,
+		Iterations: 10,
+		Parallelism: uint8(runtime.NumCPU()),
+		SaltLength: 16,
+		KeyLength: 32,
+	}
+	hashedPassword, err := argon2id.CreateHash(user.Password, &params)
+	if err != nil {
+		respondWithError(w, 500, INTERNALERROR)
+		return
+	}
+	newDbUser := queries.CreateUserParams{
+		Username: user.Username,
+		Password: hashedPassword,
+		CreatedAt: time.Now().Format(time.RFC3339),
+		UpdatedAt: time.Now().Format(time.RFC3339),
+	}
+	dbUser, err := h.State.DbQueries.CreateUser(context.Background(), newDbUser)
+	if err != nil {
+		fmt.Println("Unable to serialize user", err)
+		respondWithError(w, 500, INTERNALERROR)
+		return
+	}
+
+	respUser := struct {
+		ID int `json:"id"`
+		Username string `json:"username"`
+		CreatedAt string `json:"created_at"`
+		UpdatedAt string `json:"updated_at"`
+	}{
+		int(dbUser.ID),
+		dbUser.Username,
+		dbUser.CreatedAt,
+		dbUser.UpdatedAt,
+	}
+
+	respData, err := json.Marshal(respUser)
+	if err != nil {
+		respondWithError(w, 500, INTERNALERROR)
+		return
+	}
+	sendJson(w, 201, respData)
 }

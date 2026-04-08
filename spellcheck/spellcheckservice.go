@@ -3,6 +3,7 @@ package spellcheck
 import (
 	"errors"
 	"io"
+	"mime/multipart"
 	"strings"
 )
 
@@ -50,11 +51,18 @@ func (p *Parser) parseAndCheckLines(readBuffer []byte) {
 	}
 }
 
-func (p *Parser) SpellCheckerService(bodyReader io.Reader) ([]Error, error) {
+func (p *Parser) SpellCheckerService(bodyReader *multipart.Reader) ([]Error, error) {
 	readBuffer := make([]byte, 1024)
 	for {
 		forParsing := make([]byte, 0)
-		read, err := bodyReader.Read(readBuffer)
+		part, err := bodyReader.NextPart()
+		if err != nil {
+			if err == io.EOF {
+				return p.Errors, nil
+			}
+			return nil, errors.New("error reading input")
+		}
+		read, err := part.Read(readBuffer)
 		if err != nil {
 			if err == io.EOF {
 				forParsing = append(forParsing, p.leftOvers...)
@@ -80,5 +88,4 @@ func (p *Parser) SpellCheckerService(bodyReader io.Reader) ([]Error, error) {
 			p.parseAndCheckLines(forParsing)
 		}
 	}
-	return nil, nil
 }
