@@ -20,7 +20,7 @@ const (
 	FILENOTFOUND  = "The Requested File Can Not Be Found"
 	FILENOTSAVED  = "The File Was Not Stored Due to an Internal Error"
 	BADREQ        = "Bad Request"
-	USEREXISTS        = "Username Already Exists"
+	USEREXISTS    = "Username Already Exists"
 )
 
 type Handlers struct {
@@ -38,7 +38,9 @@ func (h *Handlers) HandleSpellCheck(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 400, BADREQ)
 		return
 	}
-
+	// TODO: when creating the WordMap it should have the timestamp of the last change on the dict file.
+	// if current time is 1h > than last change on the cache then we recheck the last change of the dict file.
+	// if its newer than the timestamp on the WordMap we invalidate the cached item
 	mr, err := r.MultipartReader()
 	if err != nil {
 		respondWithError(w, 400, BADREQ)
@@ -61,13 +63,36 @@ func (h *Handlers) HandleSpellCheck(w http.ResponseWriter, r *http.Request) {
 	sendJson(w, 200, json)
 }
 
+// TODO: delete file
+// TODO if file is not .md then return error
 func (h *Handlers) HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 	mr, err := r.MultipartReader()
 	if err != nil {
 		respondWithError(w, 400, BADREQ)
 		return
 	}
-	err = h.State.Storage.StoreFile(mr)
+	// auth user and get id
+	user, err := h.State.DbQueries.GetUser(context.Background(), "stra")
+	if err != nil {
+		respondWithError(w, 500, BADREQ)
+		return
+	}
+
+	fileName, err := h.State.Storage.StoreFile(mr)
+	if err != nil {
+		respondWithError(w, 500, FILENOTSAVED)
+		return
+	}
+	// TODO:
+	// does the file already exist in db and on disk? if yes update the file, and replace
+	// if invalid state report error
+	fileData := queries.CreateFileParams{
+		Name:      fileName,
+		CreatedAt: time.Now().Format(time.RFC3339),
+		UpdatedAt: time.Now().Format(time.RFC3339),
+		UserID:    user.ID,
+	}
+	_, err = h.State.DbQueries.CreateFile(context.Background(), fileData)
 	if err != nil {
 		respondWithError(w, 500, FILENOTSAVED)
 		return
@@ -80,6 +105,16 @@ func (h *Handlers) HandleGetHtml(w http.ResponseWriter, r *http.Request) {
 	if fileName == "" {
 		respondWithError(w, 400, BADREQ)
 	}
+	// TODO: auth the user
+	// TODO: html file exists for this user? is the timestamp of this file newer or == to the md version of the file?
+	// if yes return if no, convert again we have a new file
+	// if the md file was deleted but we still have an html version then we just return it
+	// auth user and get id
+	user, err := h.State.DbQueries.GetUser(context.Background(), "stra")
+	if err != nil {
+		respondWithError(w, 500, BADREQ)
+		return
+	}
 	htmlFilePath := h.State.Storage.FileURL(fileName + ".html")
 	if htmlFilePath != "" {
 		http.ServeFile(w, r, htmlFilePath)
@@ -90,7 +125,18 @@ func (h *Handlers) HandleGetHtml(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 404, FILENOTFOUND)
 		return
 	}
-	htmlFilePath, err := converter.ConvertToHtml(path, fileName)
+	htmlFilePath, err = converter.ConvertToHtml(path, fileName)
+	fileData := queries.CreateFileParams{
+		Name:      fileName,
+		CreatedAt: time.Now().Format(time.RFC3339),
+		UpdatedAt: time.Now().Format(time.RFC3339),
+		UserID:    user.ID,
+	}
+	_, err = h.State.DbQueries.CreateFile(context.Background(), fileData)
+	if err != nil {
+		respondWithError(w, 500, FILENOTSAVED)
+		return
+	}
 	// update the db with the file version
 	if err != nil {
 		respondWithError(w, 500, "Unable to fetch html file")
@@ -116,11 +162,11 @@ func (h *Handlers) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := argon2id.Params{
-		Memory: 128 * 1024,
-		Iterations: 10,
+		Memory:      128 * 1024,
+		Iterations:  10,
 		Parallelism: uint8(runtime.NumCPU()),
-		SaltLength: 16,
-		KeyLength: 32,
+		SaltLength:  16,
+		KeyLength:   32,
 	}
 	hashedPassword, err := argon2id.CreateHash(user.Password, &params)
 	if err != nil {
@@ -128,8 +174,8 @@ func (h *Handlers) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	newDbUser := queries.CreateUserParams{
-		Username: user.Username,
-		Password: hashedPassword,
+		Username:  user.Username,
+		Password:  hashedPassword,
 		CreatedAt: time.Now().Format(time.RFC3339),
 		UpdatedAt: time.Now().Format(time.RFC3339),
 	}
@@ -141,8 +187,8 @@ func (h *Handlers) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respUser := struct {
-		ID int `json:"id"`
-		Username string `json:"username"`
+		ID        int    `json:"id"`
+		Username  string `json:"username"`
 		CreatedAt string `json:"created_at"`
 		UpdatedAt string `json:"updated_at"`
 	}{

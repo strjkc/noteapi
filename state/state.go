@@ -8,7 +8,7 @@ import (
 )
 
 type Storage interface {
-	StoreFile(data *multipart.Reader) error
+	StoreFile(data *multipart.Reader) (string, error)
 	GetFile(filePath string) ([]byte, error)
 	FileExists(filePath string) bool
 	StorageDir() string
@@ -18,7 +18,7 @@ type Storage interface {
 type State struct {
 	Storage        Storage
 	WordMapFactory *spellcheck.WordMapFactory
-	DbQueries *queries.Queries
+	DbQueries      *queries.Queries
 }
 
 func NewState(storage Storage, wmf *spellcheck.WordMapFactory, dbQueries *queries.Queries) *State {

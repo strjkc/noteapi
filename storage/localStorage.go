@@ -17,14 +17,14 @@ func NewLocalStorage(storagePath string) *LocalStorage {
 	return &l
 }
 
-func (l *LocalStorage) StoreFile(data *multipart.Reader) error {
+func (l *LocalStorage) StoreFile(data *multipart.Reader) (string, error) {
 	if _, err := os.Stat(l.storageDir); os.IsNotExist(err) {
 		os.Mkdir(l.storageDir, 0o755)
 	}
 	tmpFile, err := os.CreateTemp(l.storageDir, "tempFile*")
 	if err != nil {
 		fmt.Println("error occured")
-		return err
+		return "", err
 	}
 	defer tmpFile.Close()
 	defer os.Remove(tmpFile.Name())
@@ -37,7 +37,7 @@ func (l *LocalStorage) StoreFile(data *multipart.Reader) error {
 			if err == io.EOF {
 				break
 			}
-			return err
+			return "", err
 		}
 		if part.FileName() == "" {
 			continue
@@ -48,22 +48,22 @@ func (l *LocalStorage) StoreFile(data *multipart.Reader) error {
 
 		_, err = io.Copy(tmpFile, part)
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	filePath := filepath.Join(l.storageDir, fileName)
 	file, err := os.Create(filePath)
 	if err != nil {
-		return err
+		return "", err
 	}
 	tmpFile.Seek(0, io.SeekStart)
 	_, err = io.Copy(file, tmpFile)
 	if err != nil {
 		os.Remove(filePath)
-		return err
+		return "", err
 	}
-	return nil
+	return fileName, nil
 }
 
 func (l *LocalStorage) GetFile(fileName string) ([]byte, error) {
