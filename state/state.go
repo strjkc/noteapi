@@ -8,11 +8,13 @@ import (
 )
 
 type Storage interface {
-	StoreFile(data *multipart.Reader) (string, error)
+	StoreFile(data *multipart.Reader) (string, string, error)
 	GetFile(filePath string) ([]byte, error)
 	FileExists(filePath string) bool
 	StorageDir() string
 	FileURL(fileName string) string
+	DeleteFile(fileName string) error
+	RenameFile(fileName, newFileName string) error
 }
 
 type State struct {
