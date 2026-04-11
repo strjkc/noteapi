@@ -2,13 +2,12 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"runtime"
+	"strconv"
 	"time"
 
-	"github.com/alexedwards/argon2id"
+	"github.com/strjkc/noteapi/auth"
 	"github.com/strjkc/noteapi/converter"
 	"github.com/strjkc/noteapi/internal/queries"
 	"github.com/strjkc/noteapi/spellcheck"
@@ -41,9 +40,6 @@ func (h *Handlers) HandleSpellCheck(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 400, BADREQ)
 		return
 	}
-	// TODO: when creating the WordMap it should have the timestamp of the last change on the dict file.
-	// if current time is 1h > than last change on the cache then we recheck the last change of the dict file.
-	// if its newer than the timestamp on the WordMap we invalidate the cached item
 	mr, err := r.MultipartReader()
 	if err != nil {
 		respondWithError(w, 400, BADREQ)
@@ -73,8 +69,17 @@ func (h *Handlers) HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 400, BADREQ)
 		return
 	}
-	// auth user and get id
-	user, err := h.State.DbQueries.GetUser(context.Background(), "stra")
+	uid, err := auth.ValidateToken(r.Header.Get("Authorization"))
+	if err != nil {
+		fmt.Println("Error")
+	}
+	userID, err := strconv.Atoi(uid)
+	if err != nil {
+		respondWithError(w, 500, INTERNALERROR)
+		return
+	}
+
+	user, err := h.State.DbQueries.GetUser(context.Background(), int64(userID))
 	if err != nil {
 		respondWithError(w, 500, BADREQ)
 		return
@@ -162,7 +167,7 @@ func (h *Handlers) HandleGetHtml(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 400, BADREQ)
 	}
 	// TODO: auth the user
-	user, err := h.State.DbQueries.GetUser(context.Background(), "stra")
+	user, err := h.State.DbQueries.GetUser(context.Background(), 1)
 	if err != nil {
 		respondWithError(w, 500, BADREQ)
 		return
@@ -285,65 +290,4 @@ func (h *Handlers) HandleGetHtml(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println("found on disk, newer than orig")
 	http.ServeFile(w, r, htmlFilePath)
-}
-
-func (h *Handlers) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
-	type UserReq struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
-	var user UserReq
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		respondWithError(w, 400, BADREQ)
-		return
-	}
-	_, err := h.State.DbQueries.GetUser(context.Background(), user.Username)
-	if err == nil {
-		respondWithError(w, 400, USEREXISTS)
-		return
-	}
-
-	params := argon2id.Params{
-		Memory:      128 * 1024,
-		Iterations:  10,
-		Parallelism: uint8(runtime.NumCPU()),
-		SaltLength:  16,
-		KeyLength:   32,
-	}
-	hashedPassword, err := argon2id.CreateHash(user.Password, &params)
-	if err != nil {
-		respondWithError(w, 500, INTERNALERROR)
-		return
-	}
-	newDbUser := queries.CreateUserParams{
-		Username:  user.Username,
-		Password:  hashedPassword,
-		CreatedAt: time.Now().Format(time.RFC3339),
-		UpdatedAt: time.Now().Format(time.RFC3339),
-	}
-	dbUser, err := h.State.DbQueries.CreateUser(context.Background(), newDbUser)
-	if err != nil {
-		fmt.Println("Unable to serialize user", err)
-		respondWithError(w, 500, INTERNALERROR)
-		return
-	}
-
-	respUser := struct {
-		ID        int    `json:"id"`
-		Username  string `json:"username"`
-		CreatedAt string `json:"created_at"`
-		UpdatedAt string `json:"updated_at"`
-	}{
-		int(dbUser.ID),
-		dbUser.Username,
-		dbUser.CreatedAt,
-		dbUser.UpdatedAt,
-	}
-
-	respData, err := json.Marshal(respUser)
-	if err != nil {
-		respondWithError(w, 500, INTERNALERROR)
-		return
-	}
-	sendJson(w, 201, respData)
 }

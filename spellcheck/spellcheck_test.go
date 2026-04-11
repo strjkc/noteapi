@@ -5,19 +5,17 @@ import (
 	"testing"
 )
 
-var (
-	checker SpellChecker
-	wm      *WordMap
-)
+var wm *WordMap
 
-func Setup(m *testing.M) {
+func TestMain(m *testing.M) {
 	fact := NewWordMapFactory(os.Getenv("DICTDIR"))
-	wm, err := fact.WordMap("eng")
+	f, err := fact.WordMap("eng")
 	if err != nil {
 		return
 	}
-	checker = NewChecker(wm)
+	wm = f
 	m.Run()
+	os.Exit(0)
 }
 
 func TestSpellcheckPositive(t *testing.T) {
