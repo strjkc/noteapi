@@ -78,7 +78,7 @@ func (h *Handlers) HandleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleRemoveUser(w http.ResponseWriter, r *http.Request) {
-	id, err := auth.ValidateToken(r.Headers.Get("Authorization"))
+	id, err := auth.ValidateToken(r.Header.Get("Authorization"))
 	if err != nil {
 		respondWithError(w, 500, INTERNALERROR)
 		return
@@ -88,7 +88,7 @@ func (h *Handlers) HandleRemoveUser(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 500, INTERNALERROR)
 		return
 	}
-	data, err := h.Stete.DbQueries.RemoveUser(context.Background(), userID)
+	data, err := h.State.DbQueries.RemoveUser(context.Background(), int64(userID))
 	if err != nil {
 		respondWithError(w, 500, INTERNALERROR)
 		return
@@ -98,11 +98,48 @@ func (h *Handlers) HandleRemoveUser(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 500, INTERNALERROR)
 		return
 	}
-	sendJson(w, 204, data)
+	sendJson(w, 204, respData)
 }
 
 func (h *Handlers) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
-	// token required
+	id, err := auth.ValidateToken(r.Header.Get("Authorization"))
+	if err != nil {
+		respondWithError(w, 500, INTERNALERROR)
+		return
+	}
+	userID, err := strconv.Atoi(id)
+	if err != nil {
+		respondWithError(w, 500, INTERNALERROR)
+		return
+	}
+	dbUser, err := h.State.DbQueries.GetUser(context.Background(), int64(userID))
+	if err != nil {
+		respondWithError(w, 400, BADREQ)
+		return
+	}
+	var userReq UserReq
+	if err := json.NewDecoder(r.Body).Decode(&userReq); err != nil {
+		respondWithError(w, 400, BADREQ)
+		return
+	}
+	if !validateUsername(userReq.Username) {
+		respondWithError(w, 400, BADREQ)
+		return
+	}
+	if len(userReq.Password) < 6 {
+		respondWithError(w, 400, BADREQ)
+		return
+	}
+
+	if dbUser.Username != userReq.Username {
+		u2, err := h.State.DbQueries.GetUserByUname(context.Background(), userReq.Username)
+		if err != nil {
+			// TODO: update user
+		}
+		respondWithError(w, 400, USEREXISTS)
+		return
+	}
+
 	// username and password required
 	// if token valid, check if user from db.Username == username - update password
 	// if db.Username != username check if username exists, if no update username
