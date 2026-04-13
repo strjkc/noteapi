@@ -12,7 +12,7 @@ import (
 
 var checker spellcheck.SpellChecker
 
-func Setup(m *testing.M) {
+func TestMain(m *testing.M) {
 	fact := spellcheck.NewWordMapFactory(os.Getenv("DICTDIR"))
 	wm, err := fact.WordMap("eng")
 	if err != nil {

@@ -27,7 +27,6 @@ func (l *LocalStorage) StoreFile(data *multipart.Reader) (string, string, error)
 		return "", "", err
 	}
 	defer tmpFile.Close()
-	// defer os.Remove(tmpFile.Name())
 
 	var fileName string
 
@@ -51,21 +50,7 @@ func (l *LocalStorage) StoreFile(data *multipart.Reader) (string, string, error)
 			return "", "", err
 		}
 	}
-
-	/*
-		filePath := filepath.Join(l.storageDir, fileName)
-		file, err := os.Create(filePath)
-		if err != nil {
-			return "", err
-		}
-		tmpFile.Seek(0, io.SeekStart)
-		_, err = io.Copy(file, tmpFile)
-		if err != nil {
-			os.Remove(filePath)
-			return "", err
-		}
-	*/
-	return fileName, tmpFile.Name(), nil
+	return fileName, filepath.Base(tmpFile.Name()), nil
 }
 
 func (l *LocalStorage) GetFile(fileName string) ([]byte, error) {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/mattn/go-sqlite3"
@@ -20,12 +21,15 @@ type UserReq struct {
 }
 
 const (
-	INVALIDPASSWORD = "Invalid Password for User"
+	INVALIDCREDENTIALS = "Invalid Username Or Password"
 )
 
 func validateUsername(username string) bool {
-	// TODO:
-	// must contain letters only and no sopaces, land longer than 0
+	for _, letter := range strings.ToLower(username) {
+		if letter < 'a' || letter > 'z' {
+			return false
+		}
+	}
 	return true
 }
 
@@ -46,16 +50,17 @@ func (h *Handlers) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 	dbUser, err := h.State.DbQueries.GetUserByUname(context.Background(), userReq.Username)
 	if err != nil {
-		respondWithError(w, 500, INTERNALERROR)
+		respondWithError(w, 400, INVALIDCREDENTIALS)
 		return
 	}
+	// TODO: simplify to return error if creds not valid?
 	ok, err := auth.ValidatePassword(userReq.Password, dbUser.Password)
 	if err != nil {
-		respondWithError(w, 500, INTERNALERROR)
+		respondWithError(w, 400, INVALIDCREDENTIALS)
 		return
 	}
 	if !ok {
-		respondWithError(w, 400, INVALIDPASSWORD)
+		respondWithError(w, 400, INVALIDCREDENTIALS)
 		return
 	}
 	userID := strconv.Itoa(int(dbUser.ID))
@@ -101,22 +106,20 @@ func (h *Handlers) HandleRemoveUser(w http.ResponseWriter, r *http.Request) {
 	sendJson(w, 204, respData)
 }
 
+// TODO: updating a user could be a helper function
 func (h *Handlers) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
-	id, err := auth.ValidateToken(r.Header.Get("Authorization"))
-	if err != nil {
-		respondWithError(w, 500, INTERNALERROR)
-		return
-	}
-	userID, err := strconv.Atoi(id)
-	if err != nil {
-		respondWithError(w, 500, INTERNALERROR)
-		return
-	}
-	dbUser, err := h.State.DbQueries.GetUser(context.Background(), int64(userID))
-	if err != nil {
+	// TODO: handle no user found for login in a better way
+	reqToken := r.Header.Get("Authorization")
+	if reqToken == "" {
 		respondWithError(w, 400, BADREQ)
 		return
 	}
+	id, err := auth.ValidateToken(reqToken)
+	if err != nil {
+		respondWithError(w, 500, INTERNALERROR)
+		return
+	}
+
 	var userReq UserReq
 	if err := json.NewDecoder(r.Body).Decode(&userReq); err != nil {
 		respondWithError(w, 400, BADREQ)
@@ -131,25 +134,104 @@ func (h *Handlers) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userID, err := strconv.Atoi(id)
+	if err != nil {
+		respondWithError(w, 500, INTERNALERROR)
+		return
+	}
+
+	dbUser, err := h.State.DbQueries.GetUser(context.Background(), int64(userID))
+	if err != nil {
+		respondWithError(w, 400, BADREQ)
+		return
+	}
+	type respData struct {
+		UserID    int    `json:"userid"`
+		Username  string `json:"username"`
+		Password  string `json:"password"`
+		UpdatedAt string `json:"updatedAt"`
+		CreatedAt string `json:"createdAt"`
+	}
+
 	if dbUser.Username != userReq.Username {
-		u2, err := h.State.DbQueries.GetUserByUname(context.Background(), userReq.Username)
+		_, err := h.State.DbQueries.GetUserByUname(context.Background(), userReq.Username)
 		if err != nil {
-			// TODO: update user
+			hashedPass, err := auth.HashPassword(userReq.Password)
+			if err != nil {
+				respondWithError(w, 500, INTERNALERROR)
+				return
+			}
+			newUserParams := queries.UpdateUserParams{
+				Username:  userReq.Username,
+				Password:  hashedPass,
+				UpdatedAt: time.Now().Format(time.RFC3339),
+				ID:        int64(userID),
+			}
+			newUser, err := h.State.DbQueries.UpdateUser(context.Background(), newUserParams)
+			if err != nil {
+				respondWithError(w, 500, INTERNALERROR)
+				return
+			}
+			userResp := respData{
+				UserID:    int(newUser.ID),
+				Username:  newUser.Username,
+				Password:  newUser.Password,
+				CreatedAt: newUser.CreatedAt,
+				UpdatedAt: newUser.UpdatedAt,
+			}
+			data, err := json.Marshal(userResp)
+			if err != nil {
+				respondWithError(w, 500, INTERNALERROR)
+				return
+			}
+			sendJson(w, 201, data)
 		}
 		respondWithError(w, 400, USEREXISTS)
 		return
 	}
-
-	// username and password required
-	// if token valid, check if user from db.Username == username - update password
-	// if db.Username != username check if username exists, if no update username
-	// change updated_at
-	// return updated data
+	hashedPass, err := auth.HashPassword(userReq.Password)
+	if err != nil {
+		respondWithError(w, 500, INTERNALERROR)
+		return
+	}
+	newUserParams := queries.UpdateUserParams{
+		Username:  dbUser.Username,
+		Password:  hashedPass,
+		UpdatedAt: time.Now().Format(time.RFC3339),
+		ID:        int64(userID),
+	}
+	newUser, err := h.State.DbQueries.UpdateUser(context.Background(), newUserParams)
+	if err != nil {
+		respondWithError(w, 500, INTERNALERROR)
+		return
+	}
+	userResp := respData{
+		UserID:    int(newUser.ID),
+		Username:  newUser.Username,
+		Password:  newUser.Password,
+		CreatedAt: newUser.CreatedAt,
+		UpdatedAt: newUser.UpdatedAt,
+	}
+	data, err := json.Marshal(userResp)
+	if err != nil {
+		respondWithError(w, 500, INTERNALERROR)
+		return
+	}
+	sendJson(w, 201, data)
 }
 
 func (h *Handlers) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	var user UserReq
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+		respondWithError(w, 400, BADREQ)
+		return
+	}
+
+	if !validateUsername(user.Username) {
+		respondWithError(w, 400, BADREQ)
+		return
+	}
+	if len(user.Password) < 6 {
 		respondWithError(w, 400, BADREQ)
 		return
 	}

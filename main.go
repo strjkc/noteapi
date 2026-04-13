@@ -34,10 +34,14 @@ func main() {
 	state := state.NewState(storage, wmf, dbQueries)
 	handlers := handlers.NewHandlers(state)
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /app/get-html/{filename}", handlers.HandleGetHtml)
 	mux.HandleFunc("POST /api/spellcheck/{locale}", handlers.HandleSpellCheck)
 	mux.HandleFunc("POST /api/upload", handlers.HandleFileUpload)
-	mux.HandleFunc("POST /app/file-as-html/{filename}", handlers.HandleGetHtml)
+	mux.HandleFunc("DELETE /api/files/{filename}", handlers.HandleRemoveFile)
 	mux.HandleFunc("POST /api/users", handlers.HandleCreateUser)
+	mux.HandleFunc("PUT /api/users", handlers.HandleUpdateUser)
+	mux.HandleFunc("DELETE /api/users", handlers.HandleRemoveUser)
+	mux.HandleFunc("POST /api/login", handlers.HandleLogin)
 	server := http.Server{
 		Addr:    ":" + port,
 		Handler: mux,

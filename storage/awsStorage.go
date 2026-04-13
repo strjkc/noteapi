@@ -1,39 +1,40 @@
 package storage
 
-/*
-import (
-	"os"
-)
+import "mime/multipart"
 
-type LocalStorage struct {
+type S3Storage struct {
 	storageDir string
 }
 
-func NewLocalStorage(storagePath string) *LocalStorage {
-	l := LocalStorage{storageDir: storagePath}
-	return &l
+func NewS3Storage(storagePath string) *S3Storage {
+	s3 := S3Storage{storageDir: storagePath}
+	return &s3
 }
 
-func (l *LocalStorage) StoreFile(data []byte, fileName string) (bool, error) {
-	err := os.WriteFile(l.storageDir+fileName, data, 0o777)
-	if err != nil {
-		return false, err
-	}
-	return true, nil
+func (s3 *S3Storage) StoreFile(data *multipart.Reader) (string, string, error) {
+	return "", "", nil
 }
 
-func (l *LocalStorage) GetFile(fileName string) ([]byte, error) {
-	data, err := os.ReadFile(l.storageDir + fileName)
-	if err != nil {
-		return nil, err
-	}
-	return data, nil
+func (s3 *S3Storage) GetFile(filePath string) ([]byte, error) {
+	return nil, nil
 }
 
-func (l *LocalStorage) FileExists(fileName string) bool {
-	if _, err := os.Stat(l.storageDir + fileName); err != nil {
-		return false
-	}
-	return true
+func (s3 *S3Storage) FileExists(filePath string) bool {
+	return false
 }
-*/
+
+func (s3 *S3Storage) StorageDir() string {
+	return ""
+}
+
+func (s3 *S3Storage) FileURL(fileName string) string {
+	return ""
+}
+
+func (s3 *S3Storage) DeleteFile(fileName string) error {
+	return nil
+}
+
+func (s3 *S3Storage) RenameFile(fileName, newFileName string) error {
+	return nil
+}

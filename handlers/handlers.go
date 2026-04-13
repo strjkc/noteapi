@@ -56,10 +56,46 @@ func (h *Handlers) HandleSpellCheck(w http.ResponseWriter, r *http.Request) {
 	errors, err := parser.SpellCheckerService(mr)
 	if err != nil {
 		respondWithError(w, 500, INTERNALERROR)
+		return
 	}
 	fmt.Println(errors)
 	json := marshalJson(errors)
 	sendJson(w, 200, json)
+}
+
+func (h *Handlers) HandleRemoveFile(w http.ResponseWriter, r *http.Request) {
+	fileName := r.PathValue("filename")
+	if fileName == "" {
+		respondWithError(w, 400, BADREQ)
+		return
+	}
+	uid, err := auth.ValidateToken(r.Header.Get("Authorization"))
+	if err != nil {
+		fmt.Println("Error")
+	}
+	userID, err := strconv.Atoi(uid)
+
+	file, err := h.State.DbQueries.GetFile(context.Background(), queries.GetFileParams{Name: fileName, UserID: int64(userID)})
+	if err != nil {
+		respondWithError(w, 404, FILENOTFOUND)
+		return
+	}
+
+	err = h.State.DbQueries.Deleted(context.Background(), file.ID)
+	if err != nil {
+		respondWithError(w, 500, INTERNALERROR)
+		return
+	}
+
+	err = h.State.Storage.DeleteFile(fileName)
+	if err != nil {
+		_, err := h.State.DbQueries.RollbackDelete(context.Background(), file.ID)
+		if err != nil {
+			fmt.Println("Superbad error")
+			return
+		}
+	}
+	w.WriteHeader(204)
 }
 
 // TODO: if file is not .md then return error
@@ -92,7 +128,7 @@ func (h *Handlers) HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dbMDFile, err := h.State.DbQueries.GetFile(context.Background(), queries.GetFileParams{Name: fileName, UserID: user.ID})
-	if err == nil {
+	if err == nil && dbMDFile.Deleted == 0 {
 		err = h.State.Storage.RenameFile(fileName, "backup_"+fileName)
 		if err != nil {
 			respondWithError(w, 500, FILENOTSAVED)
@@ -166,8 +202,18 @@ func (h *Handlers) HandleGetHtml(w http.ResponseWriter, r *http.Request) {
 	if fileName == "" {
 		respondWithError(w, 400, BADREQ)
 	}
-	// TODO: auth the user
-	user, err := h.State.DbQueries.GetUser(context.Background(), 1)
+
+	uid, err := auth.ValidateToken(r.Header.Get("Authorization"))
+	if err != nil {
+		fmt.Println("Error")
+	}
+	userID, err := strconv.Atoi(uid)
+	if err != nil {
+		respondWithError(w, 500, INTERNALERROR)
+		return
+	}
+
+	user, err := h.State.DbQueries.GetUser(context.Background(), int64(userID))
 	if err != nil {
 		respondWithError(w, 500, BADREQ)
 		return
