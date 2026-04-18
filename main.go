@@ -26,10 +26,11 @@ func main() {
 		panic("Unable to open db connection")
 	}
 	dbQueries := queries.New(db)
-	storageDir := os.Getenv("STORAGEDIR")
+	// storageDir := os.Getenv("STORAGEDIR")
 	dictDir := os.Getenv("DICTDIR")
 	port := os.Getenv("PORT")
-	storage := storage.NewLocalStorage(storageDir)
+	// storage := storage.NewLocalStorage(storageDir)
+	storage := storage.NewS3Storage()
 	wmf := spellcheck.NewWordMapFactory(dictDir)
 	state := state.NewState(storage, wmf, dbQueries)
 	handlers := handlers.NewHandlers(state)
