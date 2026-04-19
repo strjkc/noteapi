@@ -1,13 +1,33 @@
 package auth
 
 import (
+	"errors"
+	"net/http"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/alexedwards/argon2id"
 	"github.com/golang-jwt/jwt/v5"
 )
+
+func GetUIDfromToken(r *http.Request) (int64, error) {
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		return 0, errors.New("invalid token")
+	}
+
+	uid, err := ValidateToken(token)
+	if err != nil {
+		return 0, err
+	}
+	userID, err := strconv.Atoi(uid)
+	if err != nil {
+		return 0, err
+	}
+	return int64(userID), nil
+}
 
 func ValidateToken(bearer string) (string, error) {
 	// get from string

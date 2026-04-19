@@ -100,27 +100,21 @@ func (h *Handlers) HandleRemoveFile(w http.ResponseWriter, r *http.Request) {
 
 // TODO: if file is not .md then return error
 func (h *Handlers) HandleFileUpload(w http.ResponseWriter, r *http.Request) {
-	// TODO:
-	// fajl postoji u bazi a nema ga na disku - failujemo upload i logujemo jaku gresku
-	// fajl postoji na disku ali ne u bazi - ne znamo ciji je ovo fajl to je problem, ne mozemo samo da ga prelepimo, ime fajla bi trebalo da sadrzi npr id usera, tako da ne moze ovo da se desi
-	// ako se desi treba da failujemo upload i loggujemo jaku gresku
+	// TODO: user ID's should be uuid's and they should be appended or prepended to file names
+	// file url's could be stored in the db
 	mr, err := r.MultipartReader()
 	if err != nil {
 		respondWithError(w, 400, BADREQ)
 		return
 	}
-	uid, err := auth.ValidateToken(r.Header.Get("Authorization"))
+
+	uid, err := auth.GetUIDfromToken(r)
 	if err != nil {
 		respondWithError(w, 400, BADREQ)
 		return
 	}
-	userID, err := strconv.Atoi(uid)
-	if err != nil {
-		respondWithError(w, 500, INTERNALERROR)
-		return
-	}
 
-	user, err := h.State.DbQueries.GetUser(context.Background(), int64(userID))
+	user, err := h.State.DbQueries.GetUser(context.Background(), uid)
 	if err != nil {
 		respondWithError(w, 500, BADREQ)
 		return
@@ -137,6 +131,7 @@ func (h *Handlers) HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 			respondWithError(w, 500, INCONSISTENTSTATE)
 			return
 		}
+
 		backupFileName, _, err := h.State.Storage.CommitFileWithBackup(tmpFileName, fileName)
 		if err != nil {
 			respondWithError(w, 500, FILENOTSAVED)
@@ -197,17 +192,13 @@ func (h *Handlers) HandleGetHtml(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 400, BADREQ)
 	}
 
-	uid, err := auth.ValidateToken(r.Header.Get("Authorization"))
+	uid, err := auth.GetUIDfromToken(r)
 	if err != nil {
-		fmt.Println("Error")
-	}
-	userID, err := strconv.Atoi(uid)
-	if err != nil {
-		respondWithError(w, 500, INTERNALERROR)
+		respondWithError(w, 400, BADREQ)
 		return
 	}
 
-	user, err := h.State.DbQueries.GetUser(context.Background(), int64(userID))
+	user, err := h.State.DbQueries.GetUser(context.Background(), uid)
 	if err != nil {
 		respondWithError(w, 500, BADREQ)
 		return

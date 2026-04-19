@@ -83,17 +83,12 @@ func (h *Handlers) HandleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleRemoveUser(w http.ResponseWriter, r *http.Request) {
-	id, err := auth.ValidateToken(r.Header.Get("Authorization"))
+	uid, err := auth.GetUIDfromToken(r)
 	if err != nil {
 		respondWithError(w, 500, INTERNALERROR)
 		return
 	}
-	userID, err := strconv.Atoi(id)
-	if err != nil {
-		respondWithError(w, 500, INTERNALERROR)
-		return
-	}
-	data, err := h.State.DbQueries.RemoveUser(context.Background(), int64(userID))
+	data, err := h.State.DbQueries.RemoveUser(context.Background(), uid)
 	if err != nil {
 		respondWithError(w, 500, INTERNALERROR)
 		return
@@ -109,12 +104,7 @@ func (h *Handlers) HandleRemoveUser(w http.ResponseWriter, r *http.Request) {
 // TODO: updating a user could be a helper function
 func (h *Handlers) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	// TODO: handle no user found for login in a better way
-	reqToken := r.Header.Get("Authorization")
-	if reqToken == "" {
-		respondWithError(w, 400, BADREQ)
-		return
-	}
-	id, err := auth.ValidateToken(reqToken)
+	uid, err := auth.GetUIDfromToken(r)
 	if err != nil {
 		respondWithError(w, 500, INTERNALERROR)
 		return
@@ -134,13 +124,7 @@ func (h *Handlers) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := strconv.Atoi(id)
-	if err != nil {
-		respondWithError(w, 500, INTERNALERROR)
-		return
-	}
-
-	dbUser, err := h.State.DbQueries.GetUser(context.Background(), int64(userID))
+	dbUser, err := h.State.DbQueries.GetUser(context.Background(), uid)
 	if err != nil {
 		respondWithError(w, 400, BADREQ)
 		return
@@ -165,7 +149,7 @@ func (h *Handlers) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
 				Username:  userReq.Username,
 				Password:  hashedPass,
 				UpdatedAt: time.Now().Format(time.RFC3339),
-				ID:        int64(userID),
+				ID:        uid,
 			}
 			newUser, err := h.State.DbQueries.UpdateUser(context.Background(), newUserParams)
 			if err != nil {
@@ -198,7 +182,7 @@ func (h *Handlers) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		Username:  dbUser.Username,
 		Password:  hashedPass,
 		UpdatedAt: time.Now().Format(time.RFC3339),
-		ID:        int64(userID),
+		ID:        uid,
 	}
 	newUser, err := h.State.DbQueries.UpdateUser(context.Background(), newUserParams)
 	if err != nil {
