@@ -15,6 +15,9 @@ type Storage interface {
 	FileURL(fileName string) string
 	DeleteFile(fileName string) error
 	RenameFile(fileName, newFileName string) error
+	CommitFile(tmpFileName, fileName string) (string, error)
+	CommitFileWithBackup(tmpFileName, fileName string) (string, string, error)
+	RollbackFileUpdate(backupFileName, fileName string) error
 }
 
 type State struct {

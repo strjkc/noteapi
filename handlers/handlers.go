@@ -100,6 +100,10 @@ func (h *Handlers) HandleRemoveFile(w http.ResponseWriter, r *http.Request) {
 
 // TODO: if file is not .md then return error
 func (h *Handlers) HandleFileUpload(w http.ResponseWriter, r *http.Request) {
+	// TODO:
+	// fajl postoji u bazi a nema ga na disku - failujemo upload i logujemo jaku gresku
+	// fajl postoji na disku ali ne u bazi - ne znamo ciji je ovo fajl to je problem, ne mozemo samo da ga prelepimo, ime fajla bi trebalo da sadrzi npr id usera, tako da ne moze ovo da se desi
+	// ako se desi treba da failujemo upload i loggujemo jaku gresku
 	mr, err := r.MultipartReader()
 	if err != nil {
 		respondWithError(w, 400, BADREQ)
@@ -107,7 +111,8 @@ func (h *Handlers) HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	uid, err := auth.ValidateToken(r.Header.Get("Authorization"))
 	if err != nil {
-		fmt.Println("Error")
+		respondWithError(w, 400, BADREQ)
+		return
 	}
 	userID, err := strconv.Atoi(uid)
 	if err != nil {
@@ -120,7 +125,6 @@ func (h *Handlers) HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 500, BADREQ)
 		return
 	}
-
 	fileName, tmpFileName, err := h.State.Storage.StoreFile(mr)
 	if err != nil {
 		respondWithError(w, 500, FILENOTSAVED)
@@ -129,13 +133,11 @@ func (h *Handlers) HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 
 	dbMDFile, err := h.State.DbQueries.GetFile(context.Background(), queries.GetFileParams{Name: fileName, UserID: user.ID})
 	if err == nil && dbMDFile.Deleted == 0 {
-		err = h.State.Storage.RenameFile(fileName, "backup_"+fileName)
-		if err != nil {
-			respondWithError(w, 500, FILENOTSAVED)
+		if !h.State.Storage.FileExists(fileName) {
+			respondWithError(w, 500, INCONSISTENTSTATE)
 			return
 		}
-
-		err = h.State.Storage.RenameFile(tmpFileName, fileName)
+		backupFileName, _, err := h.State.Storage.CommitFileWithBackup(tmpFileName, fileName)
 		if err != nil {
 			respondWithError(w, 500, FILENOTSAVED)
 			return
@@ -147,35 +149,28 @@ func (h *Handlers) HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 		}
 		err = h.State.DbQueries.UpdateFile(context.Background(), updateFile)
 		if err != nil {
-			err := h.State.Storage.DeleteFile(fileName)
+			err := h.State.Storage.RollbackFileUpdate(backupFileName, fileName)
 			if err != nil {
-				fmt.Println("file exists on disk but we could not delete it")
-				respondWithError(w, 500, INTERNALERROR)
-				return
-			}
-			// err
-			err = h.State.Storage.RenameFile("backup_"+fileName, fileName)
-			if err != nil {
-				fmt.Println("file exists on disk but we could not delete it")
-				respondWithError(w, 500, INTERNALERROR)
+				fmt.Println("Major error rolling back")
+				respondWithError(w, 500, FILENOTSAVED)
 				return
 			}
 		}
 
 	} else {
-		err := h.State.Storage.RenameFile(tmpFileName, fileName)
+		if h.State.Storage.FileExists(fileName) {
+			respondWithError(w, 500, INCONSISTENTSTATE)
+			return
+		}
+		_, err := h.State.Storage.CommitFile(tmpFileName, fileName)
 		if err != nil {
-			// remove temp file
 			err := h.State.Storage.DeleteFile(tmpFileName)
 			if err != nil {
-				// TODO: handle in a  better way
-				fmt.Println("major error")
+				fmt.Println("major error on rollback")
 			}
 			respondWithError(w, 500, FILENOTSAVED)
 			return
 		}
-		// we update the db with the new updated ad
-		// TODO:
 		fileData := queries.CreateFileParams{
 			Name:      fileName,
 			CreatedAt: time.Now().Format(time.RFC3339),
@@ -186,8 +181,7 @@ func (h *Handlers) HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			err := h.State.Storage.DeleteFile(fileName)
 			if err != nil {
-				// TODO: handle this in a better way
-				fmt.Println("Something mayor went wrong, the file exists on disk but could not be deleted!")
+				fmt.Println("Something major went wrong, the file exists on disk but could not be deleted!")
 			}
 			fmt.Println("Erorr saving to db: ", err)
 			respondWithError(w, 500, FILENOTSAVED)

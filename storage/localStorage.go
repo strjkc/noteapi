@@ -5,6 +5,7 @@ import (
 	"io"
 	"mime/multipart"
 	"os"
+	"path"
 	"path/filepath"
 )
 
@@ -98,4 +99,42 @@ func (l *LocalStorage) RenameFile(fileName, newFileName string) error {
 		return err
 	}
 	return nil
+}
+
+func (l *LocalStorage) CommitFile(tmpFileName, fileName string) (string, error) {
+	err := l.RenameFile(tmpFileName, fileName)
+	if err != nil {
+		fmt.Println("An error occured commiting the file")
+		return "", err
+	}
+	fileURL := path.Join(l.storageDir, fileName)
+	return fileURL, nil
+}
+
+func (l *LocalStorage) CommitFileWithBackup(tmpFileName, fileName string) (string, string, error) {
+	backupName := "backup_" + fileName
+	err := l.RenameFile(fileName, backupName)
+	if err != nil {
+		fmt.Println("An error occured creating a file backup")
+		return "", "", err
+	}
+	fileURL, err := l.CommitFile(tmpFileName, fileName)
+	if err != nil {
+		return "", "", err
+	}
+	return backupName, fileURL, nil
+}
+
+func (l *LocalStorage) RollbackFileUpdate(backupFileName, fileName string) error {
+	err := l.DeleteFile(fileName)
+	if err != nil {
+		fmt.Println("file exists on disk but we could not delete it")
+		return err
+	}
+	err = l.RenameFile(backupFileName, fileName)
+	if err != nil {
+		fmt.Println("file exists on disk but we could not delete it")
+		return err
+	}
+	return err
 }
