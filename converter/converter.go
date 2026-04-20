@@ -10,19 +10,26 @@ import (
 	"github.com/yuin/goldmark/renderer/html"
 )
 
-func ConvertToHtml(fileDir, fileName string) (string, error) {
+type Result struct {
+	Val string
+	Err error
+}
+
+func ConvertToHtml(fileDir, fileName string, ch chan<- Result) {
 	// var buff bytes.Buffer
 	mdPath := filepath.Join(fileDir, fileName+".md")
 	htmlPath := filepath.Join(fileDir, fileName+".html")
 	file, err := os.Create(htmlPath)
 	if err != nil {
-		return "", errors.New("unable to create file")
+		ch <- Result{Err: errors.New("unable to create file")}
+		return
 	}
 	defer file.Close()
 
 	mdFile, err := os.ReadFile(mdPath)
 	if err != nil {
-		return "", errors.New("unable to read file")
+		ch <- Result{Err: errors.New("unable to read file")}
+		return
 	}
 
 	htmlWriter := html.DefaultWriter
@@ -34,5 +41,6 @@ func ConvertToHtml(fileDir, fileName string) (string, error) {
 		),
 	)
 	converter.Convert(mdFile, file)
-	return htmlPath, nil
+	ch <- Result{Val: htmlPath}
+	// return htmlPath, nil
 }
