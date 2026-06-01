@@ -1,0 +1,15 @@
+name: integration
+on:
+  push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/chekcout@v4
+      - name: build and run server
+        run: docker compose -f compose.yaml up --build -d server
+      - name: run api tests
+        run: docker compose -f compose.yaml up --build -d tests
+      - name: cleanup
+        run: docker compose -f compose.yaml down -v
+
