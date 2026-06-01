@@ -212,11 +212,11 @@ func (h *Handlers) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !validateUsername(user.Username) {
-		respondWithError(w, 400, BADREQ)
+		respondWithError(w, 400, INVALIDCREDENTIALS)
 		return
 	}
 	if len(user.Password) < 6 {
-		respondWithError(w, 400, BADREQ)
+		respondWithError(w, 400, INVALIDCREDENTIALS)
 		return
 	}
 

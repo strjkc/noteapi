@@ -2,3 +2,5 @@
 .storage
 .zed
 *.db
+.*
+*__*

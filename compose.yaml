@@ -1,0 +1,24 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      PORT: 8082
+      STORAGEDIR: "./.storage/"
+      DICTDIR: "./spellcheck/"
+      TMPDIR: "./.storage/"
+      BUCKETNAME: "noteapi-files-426871656705-us-east-1-an"
+      REGION: "us-east-1"
+    ports:
+      - "8082:8082"
+    command: ["sh", "-c", "goose --dir ./database/schema/ sqlite3 ./notes.db up && ./server" ]
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile_test
+    depends_on:
+      - server
+    environment:
+      BASE_URL: "http://server:8082"
+    command: ["pytest", "-v"]

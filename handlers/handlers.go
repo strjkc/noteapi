@@ -187,14 +187,15 @@ func (h *Handlers) HandleFileUpload(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(201)
 }
 
-// TODO: handle db entry if conversion fails
+// TODO: move these to helpers
+
+// TODO: add context for the function running as a go rutine, it should cancel if we exit on error
 func (h *Handlers) convert(fileName string, uid int64) (string, error) {
 	path := h.State.Storage.StorageDir()
 	if path == "" {
 		return "", errors.New("file not found")
 	}
 	ch := make(chan converter.Result)
-	// htmlFilePath, err := converter.ConvertToHtml(path, fileName, ch)
 	go converter.ConvertToHtml(path, fileName, ch)
 	fileData := queries.CreateFileParams{
 		Name:      fileName + ".html",
@@ -218,8 +219,6 @@ func (h *Handlers) convert(fileName string, uid int64) (string, error) {
 			// TODO: handle this in a better way
 			fmt.Println("something mayor went wrong, we couln not write to the db")
 		}
-		return "", err
-
 		return "", res.Err
 	}
 	return res.Val, nil
@@ -237,12 +236,12 @@ func (h *Handlers) isHTMLstale(dbHTMLFile, dbMDFile queries.File) (bool, error) 
 	return HTMLUpdatedAt.Before(MDUpdatedAt), nil
 }
 
-// TODO: this should return created and the html content
-// filename indicates an MD file!
 func (h *Handlers) HandleConvertToHtml(w http.ResponseWriter, r *http.Request) {
 	fileName := r.PathValue("filename")
+	var htmlFilePath string
 	if fileName == "" {
 		respondWithError(w, 400, BADREQ)
+		return
 	}
 
 	uid, err := auth.GetUIDfromToken(r)
@@ -257,12 +256,12 @@ func (h *Handlers) HandleConvertToHtml(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	htmlFilePath := h.State.Storage.FileURL(fileName + ".html")
+	htmlFilePath = h.State.Storage.FileURL(fileName + ".html")
 	dbHTMLFile, err := h.State.DbQueries.GetFile(context.Background(), queries.GetFileParams{Name: fileName + ".html", UserID: user.ID})
 	if htmlFilePath == "" && err == nil {
 		err := h.State.DbQueries.Deleted(context.Background(), dbHTMLFile.ID)
 		if err != nil {
-			// TODO: handle this in a better way
+			// TODO: handle this in a better way and return
 			fmt.Println("something mayor went wrong, we couln not write to the db")
 		}
 		respondWithError(w, 500, INCONSISTENTSTATE)
@@ -283,10 +282,7 @@ func (h *Handlers) HandleConvertToHtml(w http.ResponseWriter, r *http.Request) {
 		}
 		w.WriteHeader(http.StatusCreated)
 		http.ServeFile(w, r, htmlFilePath)
-
-		// TODO: respond with 201
 	}
-	// if we are here, it means file is on disk and in the db
 
 	dbMDFile, err := h.State.DbQueries.GetFile(context.Background(), queries.GetFileParams{Name: fileName + ".md", UserID: user.ID})
 	if err != nil {
@@ -304,7 +300,6 @@ func (h *Handlers) HandleConvertToHtml(w http.ResponseWriter, r *http.Request) {
 		mdFilePath := h.State.Storage.FileURL(fileName + ".md")
 		if mdFilePath == "" {
 			// file doesn't exist on disk
-			// TODO: mark md file in db as deleted
 			err := h.State.DbQueries.Deleted(context.Background(), dbMDFile.ID)
 			if err != nil {
 				// TODO: handle this in a better way
@@ -315,14 +310,12 @@ func (h *Handlers) HandleConvertToHtml(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// TODO: update the db with the file version
-		_, err := h.convert(fileName, user.ID)
+		htmlFilePath, err = h.convert(fileName, user.ID)
 		if err != nil {
 			respondWithError(w, 500, INCONSISTENTSTATE)
 			return
 		}
-		// convert again and update the timestamps
 	}
-	// we are good we should server
 	w.WriteHeader(http.StatusCreated)
 	http.ServeFile(w, r, htmlFilePath)
 }

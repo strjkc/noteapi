@@ -1,0 +1,8 @@
+FROM python:3.14-slim
+WORKDIR /app
+COPY tests ./tests
+COPY requirements_dev.txt requirements_dev.txt
+COPY mdFile.md mdFile.md
+COPY mdFileMistakes.md mdFileMistakes.md
+COPY pyproject.toml pyproject.toml
+RUN python -m pip install -r requirements_dev.txt

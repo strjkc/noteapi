@@ -18,7 +18,7 @@ import (
 func main() {
 	err := godotenv.Load()
 	if err != nil {
-		panic("No .env found")
+		fmt.Println("No .env found")
 	}
 
 	db, err := sql.Open("sqlite3", "notes.db")
@@ -26,16 +26,17 @@ func main() {
 		panic("Unable to open db connection")
 	}
 	dbQueries := queries.New(db)
-	// storageDir := os.Getenv("STORAGEDIR")
+	storageDir := os.Getenv("STORAGEDIR")
 	dictDir := os.Getenv("DICTDIR")
 	port := os.Getenv("PORT")
-	// storage := storage.NewLocalStorage(storageDir)
-	storage := storage.NewS3Storage()
+	storage := storage.NewLocalStorage(storageDir)
+	// storage := storage.NewS3Storage()
 	wmf := spellcheck.NewWordMapFactory(dictDir)
 	state := state.NewState(storage, wmf, dbQueries)
 	handlers := handlers.NewHandlers(state)
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /app/get-html/{filename}", handlers.HandleGetHtml)
+	mux.HandleFunc("GET /app/get-html/{filename}", handlers.HandleGetHtml)
+	mux.HandleFunc("POST /app/convert-html/{filename}", handlers.HandleConvertToHtml)
 	mux.HandleFunc("POST /api/spellcheck/{locale}", handlers.HandleSpellCheck)
 	mux.HandleFunc("POST /api/upload", handlers.HandleFileUpload)
 	mux.HandleFunc("DELETE /api/files/{filename}", handlers.HandleRemoveFile)
