@@ -5,7 +5,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/chekcout@v4
+      - uses: actions/checkout@v4
       - name: build and run server
         run: docker compose -f compose.yaml up --build -d server
       - name: run api tests
